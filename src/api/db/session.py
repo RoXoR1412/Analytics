@@ -10,7 +10,11 @@ engine=sqlmodel.create_engine(DATABASE_URL)
 
 def init_db():
     print("Creating db")
+    #engine=sqlmodel.create_engine(DATABASE_URL)
     SQLModel.metadata.create_all(engine)
+    print("Db created")
+    
+
 
 
 def get_session():

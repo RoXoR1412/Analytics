@@ -12,7 +12,7 @@ async def lifespan(app: FastAPI):
     init_db()
     yield
 
-app = FastAPI()
+app = FastAPI(lifespan=lifespan)
 app.include_router(event_router, prefix="/api/events")
 
 @app.get("/")
