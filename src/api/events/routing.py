@@ -1,24 +1,46 @@
 
 from fastapi import APIRouter,Depends, HTTPException
-
+from typing import List
 from api.db.session import get_session
 from sqlmodel import Session,select
+from timescaledb.hyperfunctions import time_bucket
+from sqlalchemy import func
+from datetime import datetime, timedelta, timezone
 
-from .models import EventModel, EventListSchema, EventCreateSchema, EventUpdateSchema
+from .models import EventModel, EventBucketSchema, EventCreateSchema, EventUpdateSchema, get_utcnow
 
 router = APIRouter()
-from api.db.config import DATABASE_URL
+
 
 #GET /events/
-@router.get("/", response_model=EventListSchema)
+@router.get("/", response_model=EventBucketSchema)
 def read_events(session: Session = Depends(get_session)):
     #return a bunch of events
-    query=select(EventModel).order_by(EventModel.id.asc()).limit(10)
-    results=session.exec(query).all()
-    return {
-        "results": results,
-        "count": len(results)
-        }
+    bucket=time_bucket("1 day", EventModel.time)
+    pages=["/home","/about","/contact","/pages","pricing"]
+    query=(
+        select(
+            bucket.label('bucket'),
+            EventModel.page.label('page'),
+            func.count().label('count'),
+            )
+            .where(
+                EventModel.page.in_(pages),
+            )
+            .group_by(
+                bucket,
+                EventModel.page,
+            )
+            .order_by(
+                EventModel.page,
+                bucket,
+                )
+        )
+    # compiled_query=query.compile(compile_kwargs={"literal_binds": True})
+    # print(compiled_query)
+    results=session.exec(query).fetchall()
+    #print(results)
+    return results
 
 #POST /events/
 @router.post("/", response_model=EventModel)
@@ -60,6 +82,7 @@ def update_event(
     data=payload.model_dump()
     for key,value in data.items():
         setattr(obj,key,value)
+    obj.updated_at=get_utcnow()
     session.add(obj)
     session.commit()
     session.refresh(obj)
